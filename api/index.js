@@ -36,6 +36,7 @@ export default async (req, res) => {
     border_radius,
     number_format,
     border_color,
+    role,
     rank_icon,
     show,
   } = req.query;
@@ -71,6 +72,7 @@ export default async (req, res) => {
       username,
       parseBoolean(include_all_commits),
       parseArray(exclude_repo),
+      parseArray(role),
       showStats.includes("prs_merged") ||
         showStats.includes("prs_merged_percentage"),
       showStats.includes("discussions_started"),

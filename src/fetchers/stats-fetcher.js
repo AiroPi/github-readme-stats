@@ -6,8 +6,9 @@ import { calculateRank } from "../calculateRank.js";
 import { retryer } from "../common/retryer.js";
 import {
   CustomError,
-  logger,
   MissingParamError,
+  logger,
+  parseOwnerAffiliations,
   request,
   wrapTextMultiline,
 } from "../common/utils.js";
@@ -16,7 +17,7 @@ dotenv.config();
 
 // GraphQL queries.
 const GRAPHQL_REPOS_FIELD = `
-  repositories(first: 100, ownerAffiliations: OWNER, orderBy: {direction: DESC, field: STARGAZERS}, after: $after) {
+  repositories(first: 100, after: $after, ownerAffiliations: $ownerAffiliations, orderBy: {direction: DESC, field: STARGAZERS}) {
     totalCount
     nodes {
       name
@@ -32,15 +33,15 @@ const GRAPHQL_REPOS_FIELD = `
 `;
 
 const GRAPHQL_REPOS_QUERY = `
-  query userInfo($login: String!, $after: String) {
-    user(login: $login) {
+  query userInfo($login: String!, $after: String, $ownerAffiliations: [RepositoryAffiliation]) {
+    user(login: $login, ownerAffiliations: $ownerAffiliations) {
       ${GRAPHQL_REPOS_FIELD}
     }
   }
 `;
 
 const GRAPHQL_STATS_QUERY = `
-  query userInfo($login: String!, $after: String, $includeMergedPullRequests: Boolean!, $includeDiscussions: Boolean!, $includeDiscussionsAnswers: Boolean!) {
+  query userInfo($login: String!, $after: String, $ownerAffiliations: [RepositoryAffiliation], $includeMergedPullRequests: Boolean!, $includeDiscussions: Boolean!, $includeDiscussionsAnswers: Boolean!) {
     user(login: $login) {
       name
       login
@@ -106,6 +107,7 @@ const fetcher = (variables, token) => {
  *
  * @param {object} variables Fetcher variables.
  * @param {string} variables.username Github username.
+ * @param {string[]} ownerAffiliations The owner affiliations to filter by. Default: OWNER.
  * @param {boolean} variables.includeMergedPullRequests Include merged pull requests.
  * @param {boolean} variables.includeDiscussions Include discussions.
  * @param {boolean} variables.includeDiscussionsAnswers Include discussions answers.
@@ -115,6 +117,7 @@ const fetcher = (variables, token) => {
  */
 const statsFetcher = async ({
   username,
+  ownerAffiliations,
   includeMergedPullRequests,
   includeDiscussions,
   includeDiscussionsAnswers,
@@ -127,6 +130,7 @@ const statsFetcher = async ({
       login: username,
       first: 100,
       after: endCursor,
+      ownerAffiliations: ownerAffiliations,
       includeMergedPullRequests,
       includeDiscussions,
       includeDiscussionsAnswers,
@@ -213,7 +217,8 @@ const totalCommitsFetcher = async (username) => {
  *
  * @param {string} username GitHub username.
  * @param {boolean} include_all_commits Include all commits.
- * @param {string[]} exclude_repo Repositories to exclude.
+ * @param {string[]} exclude_repo Repositories to exclude.  Default: [].
+ * @param {string[]} ownerAffiliations Owner affiliations. Default: OWNER.
  * @param {boolean} include_merged_pull_requests Include merged pull requests.
  * @param {boolean} include_discussions Include discussions.
  * @param {boolean} include_discussions_answers Include discussions answers.
@@ -223,6 +228,7 @@ const fetchStats = async (
   username,
   include_all_commits = false,
   exclude_repo = [],
+  ownerAffiliations = [],
   include_merged_pull_requests = false,
   include_discussions = false,
   include_discussions_answers = false,
@@ -245,9 +251,11 @@ const fetchStats = async (
     contributedTo: 0,
     rank: { level: "C", percentile: 100 },
   };
+  ownerAffiliations = parseOwnerAffiliations(ownerAffiliations);
 
   let res = await statsFetcher({
     username,
+    ownerAffiliations,
     includeMergedPullRequests: include_merged_pull_requests,
     includeDiscussions: include_discussions,
     includeDiscussionsAnswers: include_discussions_answers,
